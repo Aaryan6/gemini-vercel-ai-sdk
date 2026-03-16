@@ -18,12 +18,9 @@ type KBItem = {
 function formatBytes(bytes = 0) {
   if (!bytes) return "0 B";
   const units = ["B", "KB", "MB", "GB"];
-  const index = Math.min(
-    Math.floor(Math.log(bytes) / Math.log(1024)),
-    units.length - 1,
-  );
-  const value = bytes / Math.pow(1024, index);
-  return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const v = bytes / Math.pow(1024, i);
+  return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
 export default function Home() {
@@ -32,19 +29,17 @@ export default function Home() {
   const [kbFiles, setKbFiles] = useState<FileList | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const { messages, sendMessage, setMessages, status } = useChat({
-    api: "/api/chat",
-  });
+  const { messages, sendMessage, setMessages, status } = useChat({ api: "/api/chat" });
   const [input, setInput] = useState("");
 
-  const sortedItems = useMemo(() => {
-    return [...items].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
-  }, [items]);
+  const sortedItems = useMemo(
+    () => [...items].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [items],
+  );
 
   async function loadIndex() {
     const res = await fetch("/api/index");
@@ -53,9 +48,7 @@ export default function Home() {
     setItems(data.items ?? []);
   }
 
-  useEffect(() => {
-    void loadIndex();
-  }, []);
+  useEffect(() => { void loadIndex(); }, []);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -67,26 +60,17 @@ export default function Home() {
     setUploadError(null);
 
     const formData = new FormData();
-    if (kbText.trim()) {
-      formData.set("text", kbText.trim());
-    }
-    if (kbFiles) {
-      Array.from(kbFiles).forEach((file) => formData.append("files", file));
-    }
+    if (kbText.trim()) formData.set("text", kbText.trim());
+    if (kbFiles) Array.from(kbFiles).forEach((f) => formData.append("files", f));
 
-    const res = await fetch("/api/ingest", {
-      method: "POST",
-      body: formData,
-    });
+    const res = await fetch("/api/ingest", { method: "POST", body: formData });
 
     if (!res.ok) {
-      const error = (await res.json()) as { error?: string };
-      setUploadError(error.error ?? "Failed to ingest content.");
+      const err = (await res.json()) as { error?: string };
+      setUploadError(err.error ?? "Failed to ingest content.");
     } else {
       setKbText("");
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
       setKbFiles(null);
       await loadIndex();
     }
@@ -94,204 +78,300 @@ export default function Home() {
     setIsUploading(false);
   }
 
-  async function handleDelete(itemId: string) {
+  async function handleDelete(id: string) {
     const res = await fetch("/api/delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: itemId }),
+      body: JSON.stringify({ id }),
     });
-    if (!res.ok) {
-      return;
-    }
-    await loadIndex();
+    if (res.ok) await loadIndex();
   }
 
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto grid w-full max-w-6xl gap-8 px-6 py-10 lg:grid-cols-[1.05fr_1.2fr] lg:items-start">
-        <section className="space-y-6">
-          <header className="space-y-2">
-            <h1 className="text-3xl font-semibold leading-tight text-white">
-              Multimodal knowledge base for chat.
-            </h1>
-            <p className="text-sm text-slate-400">
-              Add text, images, audio, video, or PDFs. Gemini Embedding 2 powers
-              retrieval, and the chat model answers with the most relevant
-              assets.
-            </p>
-          </header>
+  const isStreaming = status === "streaming";
 
+  return (
+    <div className="app-root">
+      {/* ── Ambient background ── */}
+      <div className="bg-ambient" aria-hidden="true">
+        <div className="orb orb-1" />
+        <div className="orb orb-2" />
+        <div className="dot-grid" />
+      </div>
+
+      {/* ── Header ── */}
+      <header className="app-header">
+        <div className="header-inner">
+          <div className="logo">
+            <div className="logo-mark">◈</div>
+            <span className="logo-name">
+              Gem<em>KB</em>
+            </span>
+          </div>
+          <div className="header-right">
+            <span className="header-tag">Gemini Embedding 2</span>
+            <div className="status-pill" data-streaming={isStreaming}>
+              <span className="status-dot" />
+              {isStreaming ? "processing" : "ready"}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* ── Main ── */}
+      <main className="app-main">
+
+        {/* ── Left: Corpus ── */}
+        <section
+          className="corpus-section animate-in"
+          style={{ "--anim-delay": "0ms" } as React.CSSProperties}
+        >
+          <div className="section-label">01 / corpus</div>
+
+          <h1 className="corpus-heading">
+            Multimodal<br />Knowledge Base
+          </h1>
+
+          <p className="corpus-sub">
+            Drop text, images, audio, video, or PDFs.{" "}
+            <span className="hl">Gemini Embedding 2</span> vectorizes
+            everything — then chat with the most relevant context.
+          </p>
+
+          {/* ── Ingest form ── */}
           <form
             onSubmit={handleIngest}
-            className="space-y-4 rounded-3xl border border-slate-800 bg-slate-900/60 p-5 shadow-[0_0_30px_-15px_rgba(59,130,246,0.5)]"
+            className="ingest-card animate-in"
+            style={{ "--anim-delay": "80ms" } as React.CSSProperties}
           >
-            <label className="block text-sm font-medium text-slate-200">
-              Add text notes
-            </label>
-            <textarea
-              value={kbText}
-              onChange={(event) => setKbText(event.target.value)}
-              placeholder="Paste notes, transcripts, or any text you want to embed."
-              rows={5}
-              className="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none ring-2 ring-transparent focus:ring-blue-500"
-            />
+            <div className="form-fields">
+              {/* Text notes */}
+              <div className="form-field">
+                <label className="field-label" htmlFor="kb-text">
+                  Text Notes
+                </label>
+                <textarea
+                  id="kb-text"
+                  value={kbText}
+                  onChange={(e) => setKbText(e.target.value)}
+                  placeholder="Paste notes, transcripts, or any text to embed…"
+                  rows={3}
+                  className="field-textarea"
+                />
+              </div>
 
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-200">
-                Add files (images, audio, video, PDF, text)
-              </label>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                onChange={(event) => setKbFiles(event.target.files)}
-                className="w-full rounded-2xl border border-dashed border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-300 file:mr-4 file:rounded-full file:border-0 file:bg-blue-500/20 file:px-4 file:py-2 file:text-sm file:text-blue-200 hover:border-blue-500/50"
-              />
-              <p className="text-xs text-slate-500">
-                Max 10 MB per file. Large media may be referenced without being
-                fully injected into the chat.
-              </p>
+              {/* File drop zone */}
+              <div className="form-field">
+                <label className="field-label">
+                  Files{" "}
+                  <span className="field-label-note">
+                    — images, audio, video, PDF, text
+                  </span>
+                </label>
+                <div
+                  className={`drop-zone${isDragOver ? " is-drag-over" : ""}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Click or drag to add files"
+                  onClick={() => fileInputRef.current?.click()}
+                  onKeyDown={(e) => e.key === "Enter" && fileInputRef.current?.click()}
+                  onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                  onDragLeave={() => setIsDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragOver(false);
+                    setKbFiles(e.dataTransfer.files);
+                  }}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    onChange={(e) => setKbFiles(e.target.files)}
+                    className="sr-only"
+                  />
+                  <div className="drop-zone-inner">
+                    <span className="drop-icon">⊕</span>
+                    {kbFiles && kbFiles.length > 0 ? (
+                      <span className="drop-text">
+                        {kbFiles.length} file{kbFiles.length > 1 ? "s" : ""} selected
+                      </span>
+                    ) : (
+                      <span className="drop-text">Drop files here or click to browse</span>
+                    )}
+                    <span className="drop-hint">Max 10 MB per file</span>
+                  </div>
+                </div>
+              </div>
+
+              {uploadError && (
+                <p className="error-msg">⚠ {uploadError}</p>
+              )}
+
+              <button type="submit" disabled={isUploading} className="embed-btn">
+                <span className="embed-btn-inner">
+                  {isUploading ? (
+                    <>
+                      <span className="embed-spinner" />
+                      Embedding…
+                    </>
+                  ) : (
+                    <>
+                      <span>⊛</span>
+                      Embed into Knowledge Base
+                    </>
+                  )}
+                </span>
+                <span className="embed-btn-shimmer" aria-hidden="true" />
+              </button>
             </div>
-
-            {uploadError ? (
-              <p className="text-sm text-rose-400">{uploadError}</p>
-            ) : null}
-
-            <button
-              type="submit"
-              disabled={isUploading}
-              className="w-full rounded-full bg-blue-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:bg-blue-500/60"
-            >
-              {isUploading ? "Embedding..." : "Embed Into Knowledge Base"}
-            </button>
           </form>
 
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-sm text-slate-400">
-              <span>Knowledge base entries</span>
-              <span>{sortedItems.length} items</span>
+          {/* ── KB entries list ── */}
+          <div
+            className="animate-in"
+            style={{ "--anim-delay": "160ms" } as React.CSSProperties}
+          >
+            <div className="kb-list-header">
+              <span className="kb-list-title">Knowledge Base</span>
+              <span>
+                <span className="kb-count-big">{sortedItems.length}</span>
+                <span className="kb-count-unit">vectors</span>
+              </span>
             </div>
-            <div className="space-y-3">
-              {sortedItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-200"
-                >
-                  <div className="flex items-center justify-between text-xs text-slate-400">
-                    <span>{new Date(item.createdAt).toLocaleString()}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="uppercase">{item.kind}</span>
+
+            <div className="kb-entries">
+              {sortedItems.length === 0 ? (
+                <div className="kb-empty">
+                  <span className="kb-empty-glyph">◇</span>
+                  <span>No entries yet. Embed something to begin.</span>
+                </div>
+              ) : (
+                sortedItems.map((item) => (
+                  <div key={item.id} className="kb-entry">
+                    <div className="kb-entry-header">
+                      <span className="kb-kind-badge" data-kind={item.kind}>
+                        {item.kind}
+                      </span>
+                      <span className="kb-entry-time">
+                        {new Date(item.createdAt).toLocaleString()}
+                      </span>
                       <button
                         type="button"
                         onClick={() => handleDelete(item.id)}
-                        className="rounded-full border border-slate-700 px-3 py-1 text-[11px] text-slate-300 transition hover:border-rose-500 hover:text-rose-300"
+                        className="kb-delete"
                       >
-                        Delete
+                        ✕ remove
                       </button>
                     </div>
+
+                    {item.kind === "text" ? (
+                      <p className="kb-entry-text">
+                        {item.text}
+                        {item.truncated ? "…" : ""}
+                      </p>
+                    ) : (
+                      <div>
+                        <span className="kb-file-name">{item.originalName}</span>
+                        <span className="kb-file-meta">
+                          {item.mimeType} · {formatBytes(item.size)}
+                        </span>
+                        {item.text && (
+                          <span className="kb-file-extracted">
+                            text extracted{item.truncated ? " · truncated" : ""}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  {item.kind === "text" ? (
-                    <p className="mt-2 line-clamp-3 text-sm text-slate-100">
-                      {item.text}
-                      {item.truncated ? "…" : ""}
-                    </p>
-                  ) : (
-                    <div className="mt-2 space-y-1">
-                      <p className="text-sm text-slate-100">
-                        {item.originalName}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {item.mimeType} · {formatBytes(item.size)}
-                      </p>
-                      {item.text ? (
-                        <p className="text-xs text-slate-400">
-                          Text extracted · {item.truncated ? "truncated" : "ok"}
-                        </p>
-                      ) : null}
-                    </div>
-                  )}
-                </div>
-              ))}
-              {sortedItems.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-800 p-6 text-center text-sm text-slate-500">
-                  Add your first item to start chatting with it.
-                </div>
-              ) : null}
+                ))
+              )}
             </div>
           </div>
         </section>
 
-        <section className="flex min-h-[560px] max-h-[calc(100vh-6rem)] flex-col rounded-3xl border border-slate-800 bg-slate-900/60 p-5 lg:sticky lg:top-10">
-          <header className="flex items-start justify-between border-b border-slate-800 pb-4">
-            <div>
-              <h2 className="text-lg font-semibold text-white">Chat</h2>
-              <p className="text-xs text-slate-400">
-                Ask questions about anything you ingested.
-              </p>
-            </div>
-            <div className="flex flex-col items-end gap-2 text-xs text-slate-500">
-              <span>{status === "streaming" ? "Thinking..." : "Ready"}</span>
+        {/* ── Right: Chat ── */}
+        <section
+          className="chat-section animate-in"
+          style={{ "--anim-delay": "40ms" } as React.CSSProperties}
+        >
+          <div className="chat-panel">
+            {/* Chat header */}
+            <div className="chat-header">
+              <div>
+                <div className="section-label">02 / oracle</div>
+                <h2 className="chat-heading">Chat with your data</h2>
+              </div>
               <button
                 type="button"
                 onClick={() => setMessages([])}
-                className="rounded-full border border-slate-700 px-3 py-1 text-[11px] text-slate-300 transition hover:border-blue-500 hover:text-blue-200"
+                className="clear-btn"
               >
-                Clear chat
+                clear
               </button>
             </div>
-          </header>
 
-          <div className="chat-scroll flex-1 space-y-4 overflow-y-auto py-4">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${
-                  message.role === "user" ? "justify-end" : "justify-start"
-                }`}
-              >
-                <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
-                    message.role === "user"
-                      ? "bg-blue-500 text-white"
-                      : "bg-slate-950 text-slate-100"
-                  }`}
-                >
-                  {message.parts.map((part, index) =>
-                    part.type === "text" ? (
-                      <span key={index}>{part.text}</span>
-                    ) : null,
-                  )}
+            {/* Messages */}
+            <div className="chat-messages chat-scroll">
+              {messages.length === 0 ? (
+                <div className="chat-empty-state">
+                  <span className="chat-empty-glyph">◈</span>
+                  <span className="chat-empty-title">Ask anything you embedded.</span>
+                  <span>The knowledge base will surface the most relevant context.</span>
                 </div>
-              </div>
-            ))}
-            <div ref={chatEndRef} />
-          </div>
+              ) : (
+                messages.map((msg) => (
+                  <div key={msg.id} className={`msg-row ${msg.role}`}>
+                    <div className={`msg-bubble ${msg.role}`}>
+                      {msg.parts.map((part, i) =>
+                        part.type === "text" ? <span key={i}>{part.text}</span> : null,
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
 
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!input.trim() || status !== "ready") return;
-              sendMessage({ text: input.trim() });
-              setInput("");
-            }}
-            className="mt-auto flex gap-2 pt-4"
-          >
-            <input
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder="Ask about the knowledge base..."
-              className="flex-1 rounded-full border border-slate-800 bg-slate-950 px-4 py-2 text-sm text-slate-100 outline-none ring-2 ring-transparent focus:ring-blue-500"
-            />
-            <button
-              type="submit"
-              disabled={status !== "ready"}
-              className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              {/* Typing indicator while waiting for first token */}
+              {isStreaming && messages[messages.length - 1]?.role === "user" && (
+                <div className="msg-row assistant">
+                  <div className="msg-bubble assistant typing-indicator">
+                    <span /><span /><span />
+                  </div>
+                </div>
+              )}
+
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Chat input */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!input.trim() || status !== "ready") return;
+                sendMessage({ text: input.trim() });
+                setInput("");
+              }}
+              className="chat-input-row"
             >
-              Send
-            </button>
-          </form>
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask about your knowledge base…"
+                disabled={isStreaming}
+                className="chat-input"
+                autoComplete="off"
+              />
+              <button
+                type="submit"
+                disabled={status !== "ready"}
+                className="send-btn"
+              >
+                <span>Send</span>
+                <span className="send-arrow">→</span>
+              </button>
+            </form>
+          </div>
         </section>
-      </div>
+      </main>
     </div>
   );
 }
