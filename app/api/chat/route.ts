@@ -1,17 +1,17 @@
-import fs from "node:fs/promises";
 import {
   embed,
   streamText,
   convertToModelMessages,
-  type CoreMessage,
   type UIMessage,
+  smoothStream,
 } from "ai";
 import { google } from "@ai-sdk/google";
-import { readIndex, pickTopK } from "@/lib/kb";
+import { downloadStoredFile, searchStoredItems } from "@/lib/content-store";
 
 export const runtime = "nodejs";
 
 const MAX_FILE_CONTEXT_BYTES = 20 * 1024 * 1024;
+const EMBEDDING_DIMENSIONS = 1536;
 
 function extractLatestUserText(messages: UIMessage[]) {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -32,76 +32,89 @@ export async function POST(req: Request) {
   const { messages } = (await req.json()) as { messages: UIMessage[] };
 
   const query = extractLatestUserText(messages);
-  const entries = await readIndex();
 
-  let contextMessage: CoreMessage | null = null;
-  if (query && entries.length > 0) {
+  let contextMessage: {
+    role: "user";
+    content: Array<
+      | { type: "text"; text: string }
+      | { type: "file"; data: Buffer; mediaType: string }
+    >;
+  } | null = null;
+
+  if (query) {
     const { embedding: queryEmbedding } = await embed({
       model: google.embedding("gemini-embedding-2-preview"),
       value: query,
-      providerOptions: { google: { taskType: "RETRIEVAL_QUERY" } },
+      providerOptions: {
+        google: {
+          outputDimensionality: EMBEDDING_DIMENSIONS,
+          taskType: "RETRIEVAL_QUERY",
+        },
+      },
     });
 
-    const matches = pickTopK(entries, queryEmbedding, 4);
+    const matches = await searchStoredItems(queryEmbedding, 4);
     if (matches.length > 0) {
-      const parts: CoreMessage["content"] = [
+      const content: Array<
+        | { type: "text"; text: string }
+        | { type: "file"; data: Buffer; mediaType: string }
+      > = [
         {
           type: "text",
-          text: "Context from the knowledge base. Use only when relevant.",
+          text: "Context from the uploaded library. Use only when relevant.",
         },
       ];
 
       for (const match of matches) {
-        const entry = match.entry;
-        if (entry.kind === "text" && entry.text) {
-          parts.push({
+        const item = match.item;
+        if (item.kind === "text" && item.text) {
+          content.push({
             type: "text",
-            text: `Text note (${entry.id}): ${entry.text}${
-              entry.truncated ? "…" : ""
-            }`,
+            text: `Text note (${item.id}): ${item.text}${item.truncated ? "..." : ""}`,
           });
           continue;
         }
 
         if (
-          entry.kind === "file" &&
-          entry.storedPath &&
-          entry.mimeType &&
-          entry.originalName
+          item.kind === "file" &&
+          item.storagePath &&
+          item.mimeType &&
+          item.originalName
         ) {
-          if ((entry.size ?? 0) <= MAX_FILE_CONTEXT_BYTES) {
-            const buffer = await fs.readFile(entry.storedPath);
-            parts.push({
+          if ((item.size ?? 0) <= MAX_FILE_CONTEXT_BYTES) {
+            const fileBuffer = await downloadStoredFile(item.storagePath);
+            content.push({
               type: "text",
-              text: `File (${entry.id}): ${entry.originalName}`,
+              text: `File (${item.id}): ${item.originalName}`,
             });
-            parts.push({
+            content.push({
               type: "file",
-              data: buffer,
-              mediaType: entry.mimeType,
+              data: fileBuffer,
+              mediaType: item.mimeType,
             });
           } else {
-            parts.push({
+            content.push({
               type: "text",
-              text: `File (${entry.id}): ${entry.originalName} (${entry.mimeType}) is too large to inline. Refer to its metadata.`,
+              text: `File (${item.id}): ${item.originalName} (${item.mimeType}) is too large to inline. Refer to its metadata.`,
             });
           }
         }
       }
 
-      contextMessage = { role: "user", content: parts };
+      contextMessage = { role: "user", content };
     }
   }
 
   const modelMessages = await convertToModelMessages(messages);
-  const systemMessage: CoreMessage = {
+  const systemMessage = {
     role: "system",
     content:
-      "You answer questions using the provided knowledge base context. If the context is insufficient, say what is missing.",
-  };
+      "You answer questions using the provided uploaded content. If the context is insufficient, say what is missing.",
+  } as const;
 
   const response = streamText({
     model: google("gemini-2.5-flash"),
+    experimental_transform: smoothStream({ delayInMs: 30, chunking: "word" }),
     messages: [
       systemMessage,
       ...(contextMessage ? [contextMessage] : []),

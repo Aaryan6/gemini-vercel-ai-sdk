@@ -16,9 +16,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GemKB — Multimodal Knowledge Base",
+  title: "Gemini Library - Multimodal Search",
   description:
-    "Embed text, images, audio, video, and PDFs into a vector knowledge base powered by Gemini Embedding 2.",
+    "Embed text, images, audio, video, and PDFs into a searchable library powered by Gemini Embedding 2.",
 };
 
 export default function RootLayout({

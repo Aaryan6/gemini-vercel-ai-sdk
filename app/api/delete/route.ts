@@ -1,6 +1,10 @@
-import fs from "node:fs/promises";
 import { NextResponse } from "next/server";
-import { readIndex, writeIndex, type KBEntry } from "@/lib/kb";
+import {
+  deleteStoredItem,
+  getStoredItemById,
+  removeStoredFile,
+  type StoredItem,
+} from "@/lib/content-store";
 
 export const runtime = "nodejs";
 
@@ -10,25 +14,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing id." }, { status: 400 });
   }
 
-  const entries = await readIndex();
-  const target = entries.find((entry) => entry.id === id);
-  if (!target) {
+  const item = await getStoredItemById(id);
+  if (!item) {
     return NextResponse.json({ error: "Item not found." }, { status: 404 });
   }
 
-  const remaining = entries.filter((entry) => entry.id !== id);
-  await writeIndex(remaining);
+  await deleteStoredItem(id);
 
-  if (target.kind === "file" && target.storedPath) {
+  if (item.kind === "file" && item.storagePath) {
     try {
-      await fs.rm(target.storedPath, { force: true });
+      await removeStoredFile(item.storagePath);
     } catch {
-      // Ignore file system cleanup errors for now.
+      // Ignore storage cleanup errors for demo cleanup parity with the previous implementation.
     }
   }
 
   return NextResponse.json({
-    deleted: { id: target.id, kind: target.kind } satisfies Partial<KBEntry>,
+    deleted: { id: item.id, kind: item.kind } satisfies Partial<StoredItem>,
   });
 }
-

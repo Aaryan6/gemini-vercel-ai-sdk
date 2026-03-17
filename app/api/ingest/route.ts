@@ -2,19 +2,21 @@ import { NextResponse } from "next/server";
 import { embed } from "ai";
 import { google } from "@ai-sdk/google";
 import {
-  ensureDataDirs,
-  readIndex,
-  saveUpload,
+  createStoredItemId,
+  insertStoredItem,
+  removeStoredFile,
+  sanitizeStoredItem,
   truncateText,
-  writeIndex,
-  type KBEntry,
+  type StoredItem,
   toDataUrl,
-} from "@/lib/kb";
+  uploadFileToStorage,
+} from "@/lib/content-store";
 
 export const runtime = "nodejs";
 
-const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const MAX_TEXT_CHARS = 20000;
+const EMBEDDING_DIMENSIONS = 1536;
 
 function isTextMimeType(mimeType: string) {
   return mimeType.startsWith("text/");
@@ -31,13 +33,10 @@ function allowedMimeType(mimeType: string) {
 }
 
 export async function POST(req: Request) {
-  await ensureDataDirs();
   const formData = await req.formData();
   const textInput = formData.get("text");
   const files = formData.getAll("files");
-
-  const entries = await readIndex();
-  const created: KBEntry[] = [];
+  const createdItems: StoredItem[] = [];
 
   if (typeof textInput === "string" && textInput.trim().length > 0) {
     const trimmed = textInput.trim();
@@ -45,17 +44,27 @@ export async function POST(req: Request) {
     const { embedding } = await embed({
       model: google.embedding("gemini-embedding-2-preview"),
       value: text,
-      providerOptions: { google: { taskType: "RETRIEVAL_DOCUMENT" } },
+      providerOptions: {
+        google: {
+          outputDimensionality: EMBEDDING_DIMENSIONS,
+          taskType: "RETRIEVAL_DOCUMENT",
+        },
+      },
     });
 
-    created.push({
-      id: crypto.randomUUID(),
+    const insertedItem = await insertStoredItem({
+      id: createStoredItemId(),
       kind: "text",
       createdAt: new Date().toISOString(),
       embedding,
       text,
       truncated,
+      metadata: {
+        source: "text-input",
+      },
     });
+
+    createdItems.push(insertedItem);
   }
 
   for (const file of files) {
@@ -75,11 +84,7 @@ export async function POST(req: Request) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const { storedName, storedPath } = await saveUpload(
-      buffer,
-      file.name,
-      file.type,
-    );
+    const itemId = createStoredItemId();
 
     let embedding: number[] | undefined;
     let extractedText: string | undefined;
@@ -93,7 +98,12 @@ export async function POST(req: Request) {
       const embedResult = await embed({
         model: google.embedding("gemini-embedding-2-preview"),
         value: extractedText,
-        providerOptions: { google: { taskType: "RETRIEVAL_DOCUMENT" } },
+        providerOptions: {
+          google: {
+            outputDimensionality: EMBEDDING_DIMENSIONS,
+            taskType: "RETRIEVAL_DOCUMENT",
+          },
+        },
       });
       embedding = embedResult.embedding;
     } else {
@@ -103,6 +113,7 @@ export async function POST(req: Request) {
         value: file.name,
         providerOptions: {
           google: {
+            outputDimensionality: EMBEDDING_DIMENSIONS,
             taskType: "RETRIEVAL_DOCUMENT",
             content: [
               {
@@ -117,31 +128,58 @@ export async function POST(req: Request) {
       embedding = embedResult.embedding;
     }
 
-    created.push({
-      id: crypto.randomUUID(),
-      kind: "file",
-      createdAt: new Date().toISOString(),
-      embedding: embedding ?? [],
-      filename: storedName,
-      originalName: file.name,
-      mimeType: file.type,
-      size: file.size,
-      storedPath,
-      text: extractedText,
-      truncated,
-    });
+    let storagePath: string | undefined;
+
+    try {
+      const uploadedFile = await uploadFileToStorage(itemId, buffer, file.name, file.type);
+      storagePath = uploadedFile.storagePath;
+
+      const insertedItem = await insertStoredItem({
+        id: itemId,
+        kind: "file",
+        createdAt: new Date().toISOString(),
+        embedding: embedding ?? [],
+        filename: uploadedFile.storedName,
+        originalName: file.name,
+        mimeType: file.type,
+        size: file.size,
+        storagePath: uploadedFile.storagePath,
+        fileUrl: uploadedFile.fileUrl,
+        text: extractedText,
+        truncated,
+        metadata: {
+          source: "upload",
+        },
+      });
+
+      createdItems.push(insertedItem);
+    } catch (error) {
+      if (storagePath) {
+        try {
+          await removeStoredFile(storagePath);
+        } catch {
+          // Best-effort cleanup if the DB insert fails after upload.
+        }
+      }
+
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error ? error.message : "Failed to ingest uploaded file.",
+        },
+        { status: 500 },
+      );
+    }
   }
 
-  if (created.length === 0) {
+  if (createdItems.length === 0) {
     return NextResponse.json(
       { error: "No text or files provided." },
       { status: 400 },
     );
   }
 
-  await writeIndex([...created, ...entries]);
-
   return NextResponse.json({
-    added: created.map(({ embedding, ...rest }) => rest),
+    added: createdItems.map((item) => sanitizeStoredItem(item)),
   });
 }

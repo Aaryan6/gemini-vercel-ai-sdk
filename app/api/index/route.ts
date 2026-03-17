@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
-import { readIndex } from "@/lib/kb";
+import { listStoredItems, sanitizeStoredItem } from "@/lib/content-store";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  const entries = await readIndex();
-  const sanitized = entries.map(({ embedding, ...rest }) => rest);
-  return NextResponse.json({ items: sanitized });
+  const items = await listStoredItems();
+  return NextResponse.json({ items: items.map((item) => sanitizeStoredItem(item)) });
 }
-
