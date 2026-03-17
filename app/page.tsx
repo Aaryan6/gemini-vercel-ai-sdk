@@ -88,6 +88,8 @@ export default function Home() {
   }
 
   const isStreaming = status === "streaming";
+  const isThinking = status === "submitted";
+  const isBusy = isStreaming || isThinking;
 
   return (
     <div className="app-root">
@@ -109,9 +111,9 @@ export default function Home() {
           </div>
           <div className="header-right">
             <span className="header-tag">Gemini Embedding 2</span>
-            <div className="status-pill" data-streaming={isStreaming}>
+            <div className="status-pill" data-streaming={isBusy}>
               <span className="status-dot" />
-              {isStreaming ? "processing" : "ready"}
+              {isBusy ? (isThinking ? "thinking" : "processing") : "ready"}
             </div>
           </div>
         </div>
@@ -331,6 +333,17 @@ export default function Home() {
               )}
 
               {/* Typing indicator while waiting for first token */}
+              {isThinking && (
+                <div className="msg-row assistant">
+                  <div className="msg-bubble assistant thinking-indicator" aria-live="polite">
+                    <span className="thinking-label">thinking<span className="thinking-ellipsis" aria-hidden="true" /></span>
+                    <span className="thinking-dots">
+                      <span /><span /><span />
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {isStreaming && messages[messages.length - 1]?.role === "user" && (
                 <div className="msg-row assistant">
                   <div className="msg-bubble assistant typing-indicator">
