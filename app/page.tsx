@@ -138,14 +138,14 @@ export default function Home() {
   const isBusy = isStreaming || isThinking;
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
+    <div className="relative h-screen overflow-hidden">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
         <div className="absolute -right-24 -top-44 h-[38rem] w-[38rem] rounded-full bg-[radial-gradient(circle,_rgba(22,163,74,0.12)_0%,_transparent_65%)] blur-3xl" />
         <div className="absolute -bottom-32 -left-32 h-[32rem] w-[32rem] rounded-full bg-[radial-gradient(circle,_rgba(217,180,100,0.15)_0%,_transparent_65%)] blur-3xl" />
         <div className="absolute inset-0 bg-[radial-gradient(circle,_rgba(28,25,23,0.07)_1px,_transparent_1px)] bg-[size:36px_36px] [mask-image:radial-gradient(ellipse_80%_80%_at_50%_50%,black_30%,transparent_100%)]" />
       </div>
 
-      <div className="relative z-10 flex min-h-screen flex-col">
+      <div className="relative z-10 flex h-screen flex-col overflow-hidden">
         <header className="sticky top-0 z-20 border-b border-stone-900/10 bg-[#edeae2]/80 backdrop-blur-xl">
           <div className="mx-auto flex h-[52px] w-full max-w-7xl items-center justify-between px-7">
             <div className="flex items-center gap-2.5">
@@ -153,7 +153,7 @@ export default function Home() {
                 ◆
               </div>
               <span className="text-[12px] font-semibold uppercase tracking-[0.26em] text-stone-900">
-                Gemini
+                Gemini x Supabase x AI SDK
               </span>
             </div>
 
@@ -179,11 +179,9 @@ export default function Home() {
           </div>
         </header>
 
-        <main className="mx-auto grid w-full max-w-7xl flex-1 gap-7 px-7 pb-12 pt-9 lg:grid-cols-[1fr_1.45fr] lg:items-start">
-          <section className="flex flex-col">
-            <SectionLabel>01 / library</SectionLabel>
-
-            <h1 className="mb-3 font-[family:var(--font-display)] text-[40px] leading-[1.12] font-normal tracking-[-0.02em] text-stone-900 italic">
+        <main className="mx-auto grid h-[calc(100vh-52px)] w-full max-w-7xl flex-1 gap-7 overflow-hidden px-7 pb-7 pt-9 lg:grid-cols-[1fr_1.45fr]">
+          <section className="h-full overflow-y-auto pr-2">
+            <h1 className="mb-3 [font-family:var(--font-display)] text-[40px] leading-[1.12] font-normal tracking-[-0.02em] text-stone-900 italic">
               Multimodal
               <br />
               Library
@@ -382,7 +380,8 @@ export default function Home() {
                           )}
                           {item.text && (
                             <span className="mt-px block text-[10px] text-green-900/70">
-                              extracted text{item.truncated ? " · truncated" : ""}
+                              extracted text
+                              {item.truncated ? " · truncated" : ""}
                             </span>
                           )}
                         </div>
@@ -394,14 +393,13 @@ export default function Home() {
             </div>
           </section>
 
-          <section className="lg:sticky lg:top-16">
-            <div className="relative flex h-[calc(100vh-92px)] min-h-[540px] max-h-[860px] flex-col overflow-hidden rounded-[18px] border border-stone-900/10 bg-[#faf9f6] shadow-[0_4px_20px_rgba(28,25,22,0.1),0_2px_8px_rgba(28,25,22,0.06)]">
+          <section className="self-start">
+            <div className="relative flex h-[calc(100vh-116px)] min-h-[540px] max-h-[860px] flex-col overflow-hidden rounded-[18px] border border-stone-900/10 bg-[#faf9f6] shadow-[0_4px_20px_rgba(28,25,22,0.1),0_2px_8px_rgba(28,25,22,0.06)]">
               <div className="absolute inset-x-0 top-0 z-[1] h-0.5 bg-gradient-to-r from-transparent via-green-600 to-transparent opacity-45" />
 
               <div className="relative z-10 flex items-start justify-between border-b border-stone-900/10 bg-[#faf9f6] px-5 pb-4 pt-[18px]">
                 <div>
-                  <SectionLabel>02 / chat</SectionLabel>
-                  <h2 className="mt-2.5 font-[family:var(--font-display)] text-[22px] font-normal tracking-[-0.01em] text-stone-900 italic">
+                  <h2 className="[font-family:var(--font-display)] text-[22px] font-normal tracking-[-0.01em] text-stone-900 italic">
                     Chat with your uploads
                   </h2>
                 </div>
@@ -414,7 +412,7 @@ export default function Home() {
                 </button>
               </div>
 
-              <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto px-5 py-[18px]">
+              <div className="flex flex-1 flex-col gap-2.5 overflow-hidden px-5 py-[18px] overflow-y-auto">
                 {messages.length === 0 ? (
                   <div className="m-auto flex max-w-sm flex-col items-center gap-2.5 px-5 text-center text-[12px] text-stone-400">
                     <span className="text-[26px] leading-none text-green-600/30">
@@ -423,9 +421,7 @@ export default function Home() {
                     <span className="font-[family:var(--font-display)] text-[16px] font-normal italic text-stone-600">
                       Ask anything from your uploaded library.
                     </span>
-                    <span>
-                      The app will surface the most relevant context.
-                    </span>
+                    <span>The app will surface the most relevant context.</span>
                   </div>
                 ) : (
                   messages.map((message) => (
@@ -446,7 +442,9 @@ export default function Home() {
                       >
                         {message.parts.map((part, index) =>
                           part.type === "text" ? (
-                            <span key={index}>{part.text}</span>
+                            <p key={index} className="whitespace-pre-wrap">
+                              {part.text}
+                            </p>
                           ) : null,
                         )}
                       </div>

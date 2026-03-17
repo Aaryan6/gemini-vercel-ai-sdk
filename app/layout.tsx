@@ -3,7 +3,7 @@ import { Fraunces, JetBrains_Mono, Geist } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 const fraunces = Fraunces({
   variable: "--font-display",
@@ -19,7 +19,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Gemini Library - Multimodal Search",
+  title: "Gemini Embedding 2 x AI SDK x Supabase",
   description:
     "Embed text, images, audio, video, and PDFs into a searchable library powered by Gemini Embedding 2.",
 };
