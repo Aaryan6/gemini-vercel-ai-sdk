@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
-import { Fraunces, JetBrains_Mono } from "next/font/google";
+import { Fraunces, JetBrains_Mono, Geist } from "next/font/google";
 import "./globals.css";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const fraunces = Fraunces({
   variable: "--font-display",
@@ -27,8 +30,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${fraunces.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" className={cn("font-sans", geist.variable)}>
+      <body
+        className={`${fraunces.variable} ${jetbrainsMono.variable} min-h-screen bg-[#edeae2] font-[family:var(--font-mono)] text-[13px] leading-[1.65] text-stone-900 antialiased`}
+      >
         {children}
       </body>
     </html>
